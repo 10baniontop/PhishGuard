@@ -17,7 +17,7 @@ def get_domain_info(url):
     try:
         whois_info = whois.whois(domain)
         return whois_info
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -39,14 +39,32 @@ def check_headers(url):
     return False
 
 
+def check_openphish(url):
+    """
+    Checks if the given URL is listed in OpenPhish's phishing database.
+    """
+    try:
+        openphish_feed = requests.get("https://openphish.com/feed.txt", timeout=5).text
+        phishing_sites = openphish_feed.split("\n")
+        if url in phishing_sites:
+            return True  # URL is phishing
+    except requests.RequestException:
+        return False  # Unable to check (e.g., no internet connection)
+    return False  # URL not found in OpenPhish
+
+
 def detect_phishing(url):
+    if check_openphish(url):
+        result_var.set(f"[!] Alert: {url} is listed as phishing in OpenPhish!")
+        return "Phishing: OpenPhish"
+
     if not check_https(url):
         result_var.set(f"[!] Warning: {url} does not use HTTPS.")
         return "Phishing: No HTTPS"
 
     whois_info = get_domain_info(url)
     if whois_info and whois_info.creation_date:
-        creation_date = whois_info.creation_date[0]
+        creation_date = whois_info.creation_date[0] if isinstance(whois_info.creation_date, list) else whois_info.creation_date
         age = (datetime.datetime.now() - creation_date).days
         if age < 30:
             result_var.set(f"[!] Warning: {url} is a newly registered domain. Age: {age} days.")
